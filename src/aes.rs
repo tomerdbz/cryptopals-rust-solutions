@@ -1,29 +1,195 @@
+use crate::padding;
 use openssl::error::ErrorStack;
-pub fn decrypt_aes_128_ecb(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
-    use openssl::symm::decrypt;
-    use openssl::symm::Cipher;
 
-    return decrypt(Cipher::aes_128_ecb(), &key, None, encrypted_data);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn detect_128_ecb(encrypted_blobs: &[&[u8]]) -> Vec<usize> {
-    let mut ecb_blob_indexes = Vec::new();
-    for (i, &blob) in encrypted_blobs.iter().enumerate() {
-        let mut is_ecb = false;
+    #[test]
+    fn test_decrypt_aes_128_ecb() {
+        let decoded_data = base64::decode(
+            include_str!("../resources/cryptopals_set1_challenge7.txt").replace("\n", ""),
+        )
+        .unwrap();
+        let decrypted_data = decrypt_aes_128_ecb(&decoded_data, b"YELLOW SUBMARINE");
 
-        let mut blob_chunks = blob.chunks(16).collect::<Vec<&[u8]>>();
-        blob_chunks.sort();
-
-        for pair_chunks in blob_chunks.chunks(2) {
-            if pair_chunks[0] == pair_chunks[1] {
-                is_ecb = true;
-            }
-        }
-
-        if is_ecb {
-            ecb_blob_indexes.push(i);
-        }
+        assert_eq!(decrypted_data.is_ok(), true);
     }
 
-    return ecb_blob_indexes;
+    #[test]
+    fn test_ecb_encrypt_decrypt() {
+        let decoded_data = base64::decode(
+            include_str!("../resources/cryptopals_set1_challenge7.txt").replace("\n", ""),
+        )
+        .unwrap();
+
+        let decrypted_data = decrypt_aes_128_ecb(&decoded_data, b"YELLOW SUBMARINE").unwrap();
+
+        let reencrypted_data = encrypt_aes_128_ecb(&decrypted_data, b"YELLOW SUBMARINE");
+
+        assert_eq!(reencrypted_data.unwrap(), decoded_data);
+    }
+
+    #[test]
+    fn test_ecb_encrypt_decrypt_divide_to_chunks() {
+        let decoded_data = base64::decode(
+            include_str!("../resources/cryptopals_set1_challenge7.txt").replace("\n", ""),
+        )
+        .unwrap();
+
+        let blocks: Vec<&[u8]> = decoded_data.chunks(16).collect();
+        let (last, elements) = blocks.split_last().unwrap();
+
+        for block in elements {
+            assert_eq!(
+                decrypt_aes_128_ecb(block, b"YELLOW SUBMARINE").is_ok(),
+                true
+            );
+        }
+        assert_eq!(decrypt_aes_128_ecb(last, b"YELLOW SUBMARINE").is_ok(), true);
+    }
+
+    #[test]
+    fn test_cbc_decrypt() {
+        let decoded_data = base64::decode(
+            include_str!("../resources/cryptopals_set2_challenge10.txt").replace("\n", ""),
+        )
+        .unwrap();
+
+        let decrypted_data = String::from_utf8(decrypt_cbc_ecb_128_bit(
+            &decoded_data,
+            b"YELLOW SUBMARINE",
+            &vec![0; 16],
+        ))
+        .unwrap();
+
+        assert_eq!(decrypted_data.ends_with("Play that funky music \n"), true);
+    }
+
+    #[test]
+    fn test_cbc_encrypt_decrypt() {
+        let data_to_encrypt =
+            b"YELLOW SUBMARINEYELLOW SUBMARINEYELLOW SUBMARINEYELLOW SUBMARINE_EH";
+
+        let encrypted_data =
+            encrypt_cbc_ecb_128_bit(&data_to_encrypt[..], b"YELLOW SUBMARINE", &vec![0; 16]);
+
+        let decrypted_data =
+            decrypt_cbc_ecb_128_bit(&encrypted_data, b"YELLOW SUBMARINE", &vec![0; 16]);
+        assert_eq!(decrypted_data, *data_to_encrypt);
+    }
+}
+
+pub fn decrypt_aes_128_ecb(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+    use openssl::symm::Cipher;
+    use openssl::symm::Crypter;
+    use openssl::symm::Mode;
+    let mut crypter = Crypter::new(Cipher::aes_128_ecb(), Mode::Decrypt, key, None)?;
+    crypter.pad(false);
+
+    let mut output = vec![0; encrypted_data.len() + 16];
+
+    crypter.update(&encrypted_data[..], &mut output)?;
+
+    crypter.finalize(&mut output)?;
+
+    return Ok(output.drain(..encrypted_data.len()).collect());
+}
+
+pub fn encrypt_aes_128_ecb(data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+    use openssl::symm::Cipher;
+    use openssl::symm::Crypter;
+    use openssl::symm::Mode;
+    let mut crypter = Crypter::new(Cipher::aes_128_ecb(), Mode::Encrypt, key, None).unwrap();
+    crypter.pad(false);
+    let mut output = vec![0; data.len() + 16];
+
+    crypter.update(&data[..], &mut output)?;
+
+    crypter.finalize(&mut output)?;
+
+    return Ok(output.drain(..data.len()).collect::<Vec<u8>>());
+}
+
+pub fn encrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
+    let block_length = 16;
+
+    let mut last_encrypted_block: &[u8] = iv;
+    let mut encrypted_blocks: Vec<Vec<u8>> = Vec::new();
+
+    let blocks: Vec<&[u8]> = data.chunks(block_length).collect();
+    let (last, chunks) = blocks.split_last().unwrap();
+
+    for chunk in chunks {
+        let input_to_block_cipher: Vec<u8> = last_encrypted_block
+            .iter()
+            .zip(*chunk)
+            .map(|(&b1, &b2)| b1 ^ b2)
+            .collect();
+
+        encrypted_blocks.push(encrypt_aes_128_ecb(&input_to_block_cipher[..], &key).unwrap());
+
+        last_encrypted_block = encrypted_blocks.last().unwrap();
+    }
+
+    let input_to_block_cipher: Vec<u8> = last_encrypted_block
+        .iter()
+        .zip(padding::pkcs7(last, block_length).unwrap())
+        .map(|(b1, b2)| b1 ^ b2)
+        .collect();
+
+    encrypted_blocks.push(encrypt_aes_128_ecb(&input_to_block_cipher[..], &key).unwrap());
+
+    let output_vector: Vec<u8> =
+        Vec::with_capacity(encrypted_blocks.iter().fold(0, |acc, b| acc + b.len()));
+
+    let encrypted_data = encrypted_blocks
+        .iter_mut()
+        .fold(output_vector, |mut acc, v| {
+            acc.append(v);
+            acc
+        });
+
+    return encrypted_data;
+}
+
+pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
+    let block_length = 16;
+    let mut last_chunk: &[u8] = iv;
+    let mut decrypted_blocks: Vec<Vec<u8>> = Vec::new();
+
+    let blocks: Vec<&[u8]> = data.chunks(block_length).collect();
+    let (last, chunks) = blocks.split_last().unwrap();
+
+    for chunk in chunks {
+        let cipher_decrypted = decrypt_aes_128_ecb(chunk, key).unwrap();
+
+        let decrypted_block: Vec<u8> = cipher_decrypted
+            .iter()
+            .zip(last_chunk)
+            .map(|(&b1, &b2)| b1 ^ b2)
+            .collect();
+
+        decrypted_blocks.push(decrypted_block);
+
+        last_chunk = chunk;
+    }
+
+    let cipher_decrypted = decrypt_aes_128_ecb(last, key).unwrap();
+
+    let decrypted_block: Vec<u8> = cipher_decrypted
+        .iter()
+        .zip(last_chunk)
+        .map(|(&b1, &b2)| b1 ^ b2)
+        .collect();
+
+    decrypted_blocks.push(padding::remove_pkcs7(&decrypted_block[..]).unwrap());
+
+    let data = decrypted_blocks
+        .iter_mut()
+        .fold(Vec::with_capacity(data.len()), |mut acc, v| {
+            acc.append(v);
+            acc
+        });
+    return data;
 }

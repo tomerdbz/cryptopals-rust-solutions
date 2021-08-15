@@ -14,3 +14,4 @@ This is my shared attempt of writing clean Rust code and provide an (hopefully) 
 For now, the following sets are solved:
 
  - Set 1
+ - Set 2
