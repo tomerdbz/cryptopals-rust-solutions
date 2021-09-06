@@ -1,5 +1,9 @@
 pub mod cbc;
 pub mod common;
+pub mod cookie;
+pub mod ctr;
 pub mod ecb;
+pub mod mac;
+pub mod mt19937;
 pub mod oracles;
 pub mod xor;

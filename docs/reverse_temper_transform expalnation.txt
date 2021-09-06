@@ -1,0 +1,63 @@
+reverse_tamper_transform explanation
+
+step 1 reverse explaination
+14              18
+11111111111111 222222222222222222
+
+////////////////////////////////
+
+000000000000000000 11111111111111
+
+^
+
+111111111111112222 22222222222222
+
+
+step 2 reverse explaination
+define: y` my output
+        y what i want to find
+
+
+17                  15
+XXXXXXXXXXXXXXXXX 000000000000000
+
+&
+
+11101111110001100 000000000000000
+
+^
+YYYYYYYYYYYYYYYXX XXXXXXXXXXXXXXX
+
+following bits of y` are the bits of y
+[0..=17 + 20..=22 + 29]
+
+step3 explaination
+
+
+25                        7
+XXXXXXXXXXXXXXXXXXZZZZZZZ 0000000
+
+&
+1001110100101100010101101 0000000
+
+^
+YYYYYYYXXXXXXXXXXXXXXXXXX ZZZZZZZ
+
+
+step4 explaination
+
+00000000000 XXXXXXXXXXXZZZZZZZZZZ
+
+^
+
+XXXXXXXXXXX ZZZZZZZZZZYYYYYYYYYYY
+
+
+
+now we have x_n!
+
+x_n = x_k ^ (x0 upper 1 bit | x1 lower 31 bits)
+
+
+
+

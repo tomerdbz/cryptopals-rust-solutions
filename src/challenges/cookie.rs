@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_cookie_parsing() {
-        let cookie = super::parsers::Cookie::from_str("foo=bar&baz=qux&zap=zazzle").unwrap();
+        let cookie = Cookie::from_str("foo=bar&baz=qux&zap=zazzle").unwrap();
 
         assert_eq!(&cookie["foo"], "bar");
         assert_eq!(&cookie["baz"], "qux");
@@ -12,29 +13,29 @@ mod tests {
 
     #[test]
     fn test_profile_for_legit_input() {
-        let cookie = super::parsers::profile_for("tomer@gmail.com").unwrap();
+        let cookie = profile_for("tomer@gmail.com").unwrap();
         assert_eq!(&cookie["role"], "user");
         assert_eq!(&cookie["uid"], "10");
     }
 
     #[test]
     fn test_profile_for_invalid_input() {
-        let cookie = super::parsers::profile_for("tomer@gmail.com&role=admin");
+        let cookie = profile_for("tomer@gmail.com&role=admin");
         assert!(!cookie.is_ok());
     }
 
     #[test]
     fn test_encrypt_decrypt_cookie() {
-        let cookie = super::parsers::Cookie::from_str("foo=bar&baz=qux&zap=zazzle").unwrap();
-        let encrypted_data = super::oracles::ecb_challenges::encrypt_cookie(&cookie);
-        let decrypted_cookie = super::oracles::ecb_challenges::decrypt_cookie(&encrypted_data);
+        let cookie = Cookie::from_str("foo=bar&baz=qux&zap=zazzle").unwrap();
+        let encrypted_data = encrypt_cookie(&cookie);
+        let decrypted_cookie = decrypt_cookie(&encrypted_data);
 
         assert_eq!(cookie, decrypted_cookie);
     }
 
     #[test]
     fn test_make_admin_role() {
-        let admin_cookie = super::oracles::ecb_challenges::make_admin_role();
+        let admin_cookie = make_admin_role();
 
         assert_eq!(&admin_cookie["role"], "admin");
     }
@@ -103,14 +104,15 @@ pub fn profile_for(email: &str) -> Result<Cookie, ParsingError> {
 use crate::aes;
 use crate::challenges;
 use crate::padding;
-
-use std::collections::HashMap;
+use challenges::oracles;
 
 pub fn encrypt_cookie(cookie: &Cookie) -> Vec<u8> {
-    AES_KEY.with(|aes_key| {
+    let key = oracles::get_key();
+    key.with(|aes_key| {
         let data_to_encrypt = cookie.to_string();
+
         if data_to_encrypt.len() % 16 != 0 {
-            return super::encrypt_aes_128_ecb(
+            return aes::encrypt_aes_128_ecb(
                 &padding::pkcs7(data_to_encrypt.as_bytes(), 16).unwrap()[..],
                 &aes_key[..],
             )
@@ -122,10 +124,11 @@ pub fn encrypt_cookie(cookie: &Cookie) -> Vec<u8> {
 }
 
 pub fn decrypt_cookie(data: &[u8]) -> Cookie {
-    Cookie::from_str(&AES_KEY.with(|aes_key| {
+    let key = oracles::get_key();
+
+    Cookie::from_str(&key.with(|aes_key| {
         let decrypted = aes::decrypt_aes_128_ecb(data, aes_key).unwrap();
-        return String::from_utf8(super::padding::remove_pkcs7(&decrypted).unwrap_or(decrypted))
-            .unwrap();
+        return String::from_utf8(padding::remove_pkcs7(&decrypted).unwrap_or(decrypted)).unwrap();
     }))
     .unwrap()
 }

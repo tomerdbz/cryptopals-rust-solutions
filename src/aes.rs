@@ -56,11 +56,9 @@ mod tests {
         )
         .unwrap();
 
-        let decrypted_data = String::from_utf8(decrypt_cbc_ecb_128_bit(
-            &decoded_data,
-            b"YELLOW SUBMARINE",
-            &vec![0; 16],
-        ))
+        let decrypted_data = String::from_utf8(
+            decrypt_cbc_ecb_128_bit(&decoded_data, b"YELLOW SUBMARINE", &vec![0; 16]).unwrap(),
+        )
         .unwrap();
 
         assert_eq!(decrypted_data.ends_with("Play that funky music \n"), true);
@@ -75,7 +73,7 @@ mod tests {
             encrypt_cbc_ecb_128_bit(&data_to_encrypt[..], b"YELLOW SUBMARINE", &vec![0; 16]);
 
         let decrypted_data =
-            decrypt_cbc_ecb_128_bit(&encrypted_data, b"YELLOW SUBMARINE", &vec![0; 16]);
+            decrypt_cbc_ecb_128_bit(&encrypted_data, b"YELLOW SUBMARINE", &vec![0; 16]).unwrap();
         assert_eq!(decrypted_data, *data_to_encrypt);
     }
 }
@@ -131,15 +129,32 @@ pub fn encrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
 
         last_encrypted_block = encrypted_blocks.last().unwrap();
     }
+    if last.len() < block_length {
+        let input_to_block_cipher: Vec<u8> = last_encrypted_block
+            .iter()
+            .zip(padding::pkcs7(last, block_length).unwrap())
+            .map(|(b1, b2)| b1 ^ b2)
+            .collect();
 
-    let input_to_block_cipher: Vec<u8> = last_encrypted_block
-        .iter()
-        .zip(padding::pkcs7(last, block_length).unwrap())
-        .map(|(b1, b2)| b1 ^ b2)
-        .collect();
+        encrypted_blocks.push(encrypt_aes_128_ecb(&input_to_block_cipher[..], &key).unwrap());
+    } else {
+        let input_to_block_cipher: Vec<u8> = last_encrypted_block
+            .iter()
+            .zip(last.to_vec())
+            .map(|(b1, b2)| b1 ^ b2)
+            .collect();
 
-    encrypted_blocks.push(encrypt_aes_128_ecb(&input_to_block_cipher[..], &key).unwrap());
-
+        encrypted_blocks.push(encrypt_aes_128_ecb(&input_to_block_cipher[..], &key).unwrap());
+        let padding_block_input_to_block_cipher: Vec<u8> = encrypted_blocks
+            .last()
+            .unwrap()
+            .iter()
+            .zip(vec![16; 16])
+            .map(|(b1, b2)| b1 ^ b2)
+            .collect();
+        encrypted_blocks
+            .push(encrypt_aes_128_ecb(&padding_block_input_to_block_cipher[..], &key).unwrap());
+    }
     let output_vector: Vec<u8> =
         Vec::with_capacity(encrypted_blocks.iter().fold(0, |acc, b| acc + b.len()));
 
@@ -153,13 +168,29 @@ pub fn encrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
     return encrypted_data;
 }
 
-pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
+#[derive(Debug, PartialEq, Clone)]
+pub enum Error {
+    InvalidArgument,
+    ParsingError(padding::Pkcs7ParsingError),
+}
+
+use std::fmt;
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unable to proceed with aes")
+    }
+}
+
+impl std::error::Error for Error {}
+
+pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Result<Vec<u8>, Error> {
     let block_length = 16;
     let mut last_chunk: &[u8] = iv;
     let mut decrypted_blocks: Vec<Vec<u8>> = Vec::new();
 
     let blocks: Vec<&[u8]> = data.chunks(block_length).collect();
-    let (last, chunks) = blocks.split_last().unwrap();
+    let (last, chunks) = blocks.split_last().ok_or(Error::InvalidArgument)?;
 
     for chunk in chunks {
         let cipher_decrypted = decrypt_aes_128_ecb(chunk, key).unwrap();
@@ -183,7 +214,9 @@ pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
         .map(|(&b1, &b2)| b1 ^ b2)
         .collect();
 
-    decrypted_blocks.push(padding::remove_pkcs7(&decrypted_block[..]).unwrap());
+    decrypted_blocks.push(
+        padding::remove_pkcs7(&decrypted_block[..]).or_else(|e| Err(Error::ParsingError(e)))?,
+    );
 
     let data = decrypted_blocks
         .iter_mut()
@@ -191,5 +224,5 @@ pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
             acc.append(v);
             acc
         });
-    return data;
+    return Ok(data);
 }

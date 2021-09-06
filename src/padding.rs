@@ -43,15 +43,26 @@ pub fn pkcs7(data: &[u8], block_length: usize) -> Option<Vec<u8>> {
     return Some(padded_data);
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Pkcs7ParsingError {
     InvalidArgument,
+    NoPadding,
 }
+use std::error::Error;
+use std::fmt;
+
+impl fmt::Display for Pkcs7ParsingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unable to proceed with current padding")
+    }
+}
+
+impl Error for Pkcs7ParsingError {}
 
 fn validate_pkcs7(data: &[u8]) -> Result<u8, Pkcs7ParsingError> {
     let pad_length = data.last().ok_or(Pkcs7ParsingError::InvalidArgument)?;
-    if *pad_length > 16 {
-        return Err(Pkcs7ParsingError::InvalidArgument);
+    if *pad_length > 16 || *pad_length == 0 {
+        return Err(Pkcs7ParsingError::NoPadding);
     }
     if data[data.len() - *pad_length as usize..].to_vec() != vec![*pad_length; *pad_length as usize]
     {
@@ -62,10 +73,12 @@ fn validate_pkcs7(data: &[u8]) -> Result<u8, Pkcs7ParsingError> {
 }
 
 pub fn remove_pkcs7(data: &[u8]) -> Result<Vec<u8>, Pkcs7ParsingError> {
-    let pad_length = validate_pkcs7(data)?;
-
-    let mut unpadded_data: Vec<u8> = Vec::new();
-    unpadded_data.append(&mut data[..data.len() - pad_length as usize].to_vec());
-
-    return Ok(unpadded_data);
+    match validate_pkcs7(data) {
+        Ok(pad_length) => {
+            let mut unpadded_data: Vec<u8> = Vec::new();
+            unpadded_data.append(&mut data[..data.len() - pad_length as usize].to_vec());
+            return Ok(unpadded_data);
+        }
+        Err(other) => Err(other),
+    }
 }

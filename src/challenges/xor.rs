@@ -10,7 +10,7 @@ mod tests {
             include_str!("../../resources/cryptopals_set1_challenge6.txt").replace("\n", ""),
         )
         .unwrap();
-        let keys = break_repeating_xor(&decoded_data, Some(4));
+        let keys = break_repeating_xor(&decoded_data, Some(4), 2..40);
         assert_eq!(
             String::from_utf8(keys[0].clone()).unwrap(),
             "Terminator X: Bring the noise"
@@ -18,9 +18,18 @@ mod tests {
     }
 }
 
-pub fn break_repeating_xor(encrypted_data: &[u8], best: Option<usize>) -> Vec<Vec<u8>> {
+pub enum KeyRange {
+    Range(std::ops::Range<u8>),
+    RangeInclusive(std::ops::RangeInclusive<u8>),
+}
+
+pub fn break_repeating_xor(
+    encrypted_data: &[u8],
+    best: Option<usize>,
+    keysize_range: std::ops::Range<u8>,
+) -> Vec<Vec<u8>> {
     let mut inspected_keysizes = Vec::new();
-    match get_keysize(&encrypted_data, 2..40, best) {
+    match get_keysize(&encrypted_data, keysize_range, best) {
         KeysizeResult::Single(single_promising_keysize) => {
             inspected_keysizes.push(single_promising_keysize);
         }
@@ -164,7 +173,7 @@ fn get_keysize(
             let mut tuple_vector: Vec<(&u8, &f64)> = keysize_to_hamming_distance.iter().collect();
             KeysizeResult::Multiple({
                 tuple_vector.sort_by(|t1, t2| t1.1.partial_cmp(t2.1).unwrap());
-                tuple_vector[..top_n]
+                tuple_vector[..std::cmp::min(top_n, tuple_vector.len())]
                     .into_iter()
                     .map(|t| *t.0)
                     .collect::<Vec<u8>>()

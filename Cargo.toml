@@ -12,3 +12,8 @@ bitvec = "0.22.3"
 openssl = { version = "0.10.35", features = ["vendored"] }
 rand = "0.8.4"
 serde = "1.0.127"
+byteorder = "1.1.0"
+rand_mt = "4.0.1"
+#sha-1 = "0.9.7"
+sha-1 = {path = "dependencies/hashes/sha1"}
+md4 = {path = "dependencies/hashes/md4"}

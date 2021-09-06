@@ -104,7 +104,6 @@ fn break_block(
     let mut block_decrypted_bytes = Vec::new();
     let mut initial_amount = 0;
     if dont_care_prepended_length % block_size != 0 {
-        println!("{}", dont_care_prepended_length);
         initial_amount = block_size - (dont_care_prepended_length % block_size);
     }
     let relevant_block_start = (dont_care_prepended_length as f32 / 16.0).ceil() as usize * 16;
