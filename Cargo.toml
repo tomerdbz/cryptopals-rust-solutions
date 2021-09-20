@@ -14,6 +14,9 @@ rand = "0.8.4"
 serde = "1.0.127"
 byteorder = "1.1.0"
 rand_mt = "4.0.1"
-#sha-1 = "0.9.7"
 sha-1 = {path = "dependencies/hashes/sha1"}
 md4 = {path = "dependencies/hashes/md4"}
+sha2 = {path = "dependencies/hashes/sha2"}
+num-bigint = { version = "0.4.2", features = ["rand"] }
+num-traits = "0.2.14"
+num-primes = "0.1.2"

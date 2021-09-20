@@ -1,7 +1,10 @@
 pub mod aes;
 pub mod challenges;
 pub mod ctr;
+pub mod diffie_hellman;
 pub mod mac;
 pub mod mt19937;
 pub mod padding;
+pub mod protocols;
+pub mod rsa;
 pub mod xor;

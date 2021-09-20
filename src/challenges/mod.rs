@@ -6,4 +6,6 @@ pub mod ecb;
 pub mod mac;
 pub mod mt19937;
 pub mod oracles;
+pub mod protocols;
+pub mod rsa;
 pub mod xor;

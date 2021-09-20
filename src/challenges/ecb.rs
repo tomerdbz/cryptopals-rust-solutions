@@ -94,6 +94,7 @@ pub fn break_encrypt_ecb_with_secret_appended() -> Option<Vec<u8>> {
     }
 }
 
+// this function assumes there's random prepended whose len > 0
 fn break_block(
     block_index: usize,
     block_size: usize,
@@ -178,7 +179,7 @@ pub fn break_encrypt_ecb_with_secret_appended_and_random_prepended() -> Option<V
     */
     use rand::prelude::*;
     let mut rng = rand::thread_rng();
-    let random_prepended: Vec<u8> = (0..rand::random::<u8>())
+    let random_prepended: Vec<u8> = (1..rand::random::<u8>())
         .map(|_| rng.gen_range(0..u8::MAX))
         .collect();
 
@@ -186,7 +187,6 @@ pub fn break_encrypt_ecb_with_secret_appended_and_random_prepended() -> Option<V
         |data: &[u8]| encrypt_ecb_with_secret_appended(&[&random_prepended[..], data].concat());
 
     let random_length = get_random_size(encryption_method, 16).unwrap();
-
     let mut secret: Vec<u8> = Vec::new();
     for i in 0..encryption_method(&[]).len() / 16 {
         secret.append(&mut break_block(
