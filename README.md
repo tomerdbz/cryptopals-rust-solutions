@@ -18,3 +18,4 @@ For now, the following sets are solved:
  - Set 3
  - Set 4
  - Set 5
+ - Set 6
