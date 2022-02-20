@@ -1,0 +1,9 @@
+[package]
+name = "hash_break"
+version = "0.1.0"
+edition = "2018"
+
+
+[dependencies]
+crypto = {path = "../../"}
+hex = "0.4.3"

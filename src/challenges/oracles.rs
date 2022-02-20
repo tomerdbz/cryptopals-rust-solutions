@@ -209,7 +209,6 @@ pub fn cbc_padding_oracle_ciphertext_generator() -> (Vec<u8>, Vec<u8>) {
 pub fn cbc_padding_oracle_ciphertext_verifier(ciphertext: &[u8], iv: &[u8]) -> bool {
     match AES_KEY.with(|aes_key| aes::decrypt_cbc_ecb_128_bit(ciphertext, aes_key, iv)) {
         Ok(_) => true,
-        Err(aes::Error::ParsingError(_)) => false,
         Err(_) => false,
     }
 }

@@ -1,0 +1,1 @@
+docker run -t -v $PWD/../frontend:/app/frontend --network=host python-breaker $1

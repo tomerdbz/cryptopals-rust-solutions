@@ -1,24 +1,11 @@
-use num_bigint::{BigUint, RandBigInt, ToBigUint};
-use num_traits::{One, Zero};
+use crate::number::ModExp;
+use num_bigint::BigUint;
+use num_bigint::RandBigInt;
 use std::borrow::Cow;
-use std::ops::DivAssign;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_modexp() {
-        let mut rng = rand::thread_rng();
-        let a: BigUint = rng.gen_biguint(32);
-        let small_e = (rand::random::<u8>() % 4) as u32;
-        let small_e_as_biguint = BigUint::from(small_e);
-        let modulus: BigUint = rng.gen_biguint(8);
-        assert_eq!(
-            a.modexp(&small_e_as_biguint, &modulus),
-            a.pow(small_e) % modulus
-        )
-    }
 
     #[test]
     fn test_diffie_hellman() {
@@ -86,42 +73,5 @@ impl<'a> DiffieHellman<'a> {
 
     pub fn get_session_key(&self) -> Option<&BigUint> {
         self.session_key.as_ref()
-    }
-}
-
-pub trait ModExp {
-    fn modexp(&self, exponent: &BigUint, modulus: &BigUint) -> BigUint;
-}
-
-impl ModExp for BigUint {
-    fn modexp(&self, exponent: &BigUint, modulus: &BigUint) -> BigUint {
-        if *modulus == ToBigUint::to_biguint(&1).unwrap() {
-            return Zero::zero();
-        }
-
-        let zero: BigUint = Zero::zero();
-
-        if self == &zero {
-            return zero;
-        }
-
-        let mut result: BigUint = One::one();
-        if exponent == &zero {
-            return result;
-        }
-
-        let mut base = self.clone() % modulus;
-        let mut exp = exponent.clone();
-
-        while exp > Zero::zero() {
-            // if exp % 2 == 1
-            if exp.bit(0) {
-                result = (result * base.clone()) % modulus;
-            }
-
-            exp.div_assign(2u32);
-            base = (base.pow(2)) % modulus;
-        }
-        return result;
     }
 }

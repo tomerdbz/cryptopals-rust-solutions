@@ -1,4 +1,5 @@
-use crate::diffie_hellman::{DiffieHellman, ModExp};
+use crate::diffie_hellman::DiffieHellman;
+use crate::number::ModExp;
 use crate::protocols::diffie_hellman::secure_remote_password::{
     hmac_sha256, SRPServerFacade, SimpleSRPServerFacade,
 };

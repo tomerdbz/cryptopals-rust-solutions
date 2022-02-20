@@ -19,4 +19,6 @@ md4 = {path = "dependencies/hashes/md4"}
 sha2 = {path = "dependencies/hashes/sha2"}
 num-bigint = { version = "0.4.2", features = ["rand"] }
 num-traits = "0.2.14"
-num-primes = "0.1.2"
+num-primes = "0.2.0"
+num-integer = "0.1.44"
+asn1 = {path = "dependencies/rust-asn1"}

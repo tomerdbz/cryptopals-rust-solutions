@@ -1,0 +1,28 @@
+from=BBBBBBBBBBB
+
+easy mode - let's assume that if the frontend will accept a big amount (with padding)
+E(MAC XOR ";attacker:6666\x2\x2") == NEW_MAC
+
+but I can make E("from=1\xb\xb\xb\xb\xb\xb\xb\xb\xb\xb\xb")
+so I can inject E(MAC XOR (MAC XOR ))
+
+so if victim sends:
+"from=victim&tx_list=friend:100\x2\x2" || MAC
+
+I'm want it to be:
+"from=victim&tx_list=friend:100\x2\x2;attacker:6666\x2\x2" || NEW_MAC
+
+send your message - sniff the mac
+now - add your evil extension (to your msg) and you got the new MAC
+so you know E(prev_mac XOR extension) == new_mac
+but, you want to get E(MAC XOR extension)
+how can we generate MAC?
+let's assume we can extend with MAC - so we now got(prev_mac XOR MAC)
+
+another property is that if the text fits in the block - then another final block of \x0f is added
+now, a trivial way to win in easy mode - is just choose in your own message:
+extension = prev_mac XOR MAC XOR real_malicious_extension
+then you got your E(MAC XOR real_malicious_extension)
+and you could just append your real_malicious_extension to the victim message
+
+this is all well under the assumption the frontend will accept an ugly message and transmit it

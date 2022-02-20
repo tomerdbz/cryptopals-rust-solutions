@@ -1,4 +1,5 @@
-use crate::diffie_hellman::{DiffieHellman, ModExp};
+use crate::diffie_hellman::DiffieHellman;
+use crate::number::ModExp;
 use num_bigint::{BigUint, ToBigUint};
 use sha2::{Digest, Sha256};
 use std::ops::{Add, Mul};

@@ -103,10 +103,12 @@ fn break_block(
     dont_care_prepended_length: usize,
 ) -> Vec<u8> {
     let mut block_decrypted_bytes = Vec::new();
+
     let mut initial_amount = 0;
     if dont_care_prepended_length % block_size != 0 {
         initial_amount = block_size - (dont_care_prepended_length % block_size);
     }
+
     let relevant_block_start = (dont_care_prepended_length as f32 / 16.0).ceil() as usize * 16;
     for i in 1..block_size + 1 {
         let encrypted_oracle_block = encryption_method(
@@ -179,7 +181,7 @@ pub fn break_encrypt_ecb_with_secret_appended_and_random_prepended() -> Option<V
     */
     use rand::prelude::*;
     let mut rng = rand::thread_rng();
-    let random_prepended: Vec<u8> = (1..rand::random::<u8>())
+    let random_prepended: Vec<u8> = (1..rng.gen_range(2..u8::MAX))
         .map(|_| rng.gen_range(0..u8::MAX))
         .collect();
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <script
+      type="text/javascript"
+      src="https://cdn.rawgit.com/ricmoo/aes-js/e27b99df/index.js"
+    ></script>
+    <script>
+      fetch("http://localhost:9000/malicious.txt")
+        .then((resp) => resp.blob())
+        .then((blob) => new Response(blob).arrayBuffer())
+        .then((buffer) => {
+          const plaintext = new Uint8Array(buffer);
+          const padded_plaintext = aesjs.padding.pkcs7.pad(plaintext);
+          const key = aesjs.utils.utf8.toBytes("YELLOW SUBMARINE");
+          const iv = new Array(16).fill(0);
+          var aesCbc = new aesjs.ModeOfOperation.cbc(key, iv);
+          var encryptedBytes = aesCbc.encrypt(padded_plaintext);
+          var cbcMac = aesjs.utils.hex.fromBytes(
+            encryptedBytes.slice(encryptedBytes.length - 16)
+          );
+          alert(cbcMac);
+          if ("296b8d7cb78a243dda4d0a61d33bbdd1" == cbcMac) {
+            eval(new TextDecoder().decode(plaintext));
+          }
+        })
+        .catch((err) => alert(err));
+    </script>
+  </body>
+</html>

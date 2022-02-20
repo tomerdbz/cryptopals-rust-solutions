@@ -1,3 +1,6 @@
 [submodule "dependencies/hashes"]
 	path = dependencies/hashes
 	url = https://github.com/tomerdbz/hashes.git
+[submodule "dependencies/rust-asn1"]
+	path = dependencies/rust-asn1
+	url = https://github.com/tomerdbz/rust-asn1.git

@@ -1,0 +1,27 @@
+you want to send:
+(original_msg + extension, malicious_cbc_mac)
+
+you have:
+(original_msg, cbc_mac)
+
+you can make:
+(new_legit_msg, new_cbc_mac)
+
+then extend the legit - you know the extension will be XORED with new_cbc_mac.
+
+now you got:
+(new_legit_msg + extension, new_cbc_mac2)
+
+awesome - so you know "ecb(new_cbc_mac XOR extension) == new_cbc_mac2"
+
+this is crazy- cuz now you know this is valid: 
+(original_msg + ((extension XOR new_cbc_mac) XOR cbc_mac)), new_cbc_mac2)
+
+what extension will you choose?
+you want: (extension XOR cbc_mac XOR new_cbc_mac) == fb"(;{attacker_id}:1000000)"
+
+so you'll choose extension == fb"(;{attacker_id}:1000000)" XOR cbc_mac XOR new_cbc_mac
+
+please note - new_cbc_mac2 is the mac after a padding block (i.e 16 * [0x10])
+so we when we add fb"(;{attacker_id}:1000000)" to the message we need to pad it first!
+(so the extra padding block will be added too)

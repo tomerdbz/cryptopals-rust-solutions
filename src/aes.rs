@@ -1,3 +1,4 @@
+use crate::error::{Error, Res};
 use crate::padding;
 use openssl::error::ErrorStack;
 
@@ -11,8 +12,8 @@ mod tests {
             include_str!("../resources/cryptopals_set1_challenge7.txt").replace("\n", ""),
         )
         .unwrap();
-        let decrypted_data = decrypt_aes_128_ecb(&decoded_data, b"YELLOW SUBMARINE");
 
+        let decrypted_data = decrypt_aes_128_ecb(&decoded_data, b"YELLOW SUBMARINE");
         assert_eq!(decrypted_data.is_ok(), true);
     }
 
@@ -168,23 +169,7 @@ pub fn encrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
     return encrypted_data;
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Error {
-    InvalidArgument,
-    ParsingError(padding::Pkcs7ParsingError),
-}
-
-use std::fmt;
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unable to proceed with aes")
-    }
-}
-
-impl std::error::Error for Error {}
-
-pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Res<Vec<u8>> {
     let block_length = 16;
     let mut last_chunk: &[u8] = iv;
     let mut decrypted_blocks: Vec<Vec<u8>> = Vec::new();
@@ -214,9 +199,7 @@ pub fn decrypt_cbc_ecb_128_bit(data: &[u8], key: &[u8], iv: &[u8]) -> Result<Vec
         .map(|(&b1, &b2)| b1 ^ b2)
         .collect();
 
-    decrypted_blocks.push(
-        padding::remove_pkcs7(&decrypted_block[..]).or_else(|e| Err(Error::ParsingError(e)))?,
-    );
+    decrypted_blocks.push(padding::remove_pkcs7(&decrypted_block[..])?);
 
     let data = decrypted_blocks
         .iter_mut()

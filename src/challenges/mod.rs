@@ -2,6 +2,7 @@ pub mod cbc;
 pub mod common;
 pub mod cookie;
 pub mod ctr;
+pub mod dsa;
 pub mod ecb;
 pub mod mac;
 pub mod mt19937;
