@@ -1,7 +1,13 @@
+use crate::ctr;
+use crate::error::Res;
 use crate::{aes, challenges, padding};
 use aes::encrypt_aes_128_ecb;
 use aes::encrypt_cbc_ecb_128_bit;
 use challenges::common::Mode;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use rand::prelude::*;
+use std::io::prelude::*;
 
 #[cfg(test)]
 mod tests {
@@ -10,6 +16,7 @@ mod tests {
 
     use super::*;
     use challenges::common::detect_encryption_ecb_or_cbc;
+    use std::collections::HashMap;
 
     #[test]
     fn test_cbc_ecb_oracle() {
@@ -30,10 +37,205 @@ mod tests {
 
         assert!(cbc_padding_oracle_ciphertext_verifier(&ciphertext, &iv[..]))
     }
+
+    #[test]
+    fn test_ctr_compression_length_oracle_brute_force() {
+        const SECRET: &str = "TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE=";
+        let base64_char_pool = ('a'..='z')
+            .chain('A'..='Z')
+            .chain('0'..='9')
+            .chain(['+', '/', '='])
+            .collect::<Vec<_>>();
+        let mut discovered_secret_options = Vec::new();
+        discovered_secret_options.push("sessionid=".to_string());
+        let mut iteration_count = 0;
+
+        // assuming sessionid length is known
+        while iteration_count < SECRET.len() {
+            let mut secret_to_len = HashMap::new();
+            for secret_option in discovered_secret_options.iter() {
+                for c in &base64_char_pool {
+                    let secret_string = format!("{}{}", secret_option, c);
+                    let injected_data = (0..100).map(|_| secret_string.clone()).collect::<String>();
+                    secret_to_len.insert(
+                        secret_string,
+                        ctr_compression_length_oracle(injected_data.as_bytes()).unwrap(),
+                    );
+                }
+            }
+
+            let mut count_vec: Vec<(String, usize)> = secret_to_len.into_iter().collect();
+            count_vec.sort_by(|a, b| b.1.cmp(&a.1));
+
+            let best_compressed_char_len = count_vec.last().unwrap().1;
+            let worst_compressed_char_len = count_vec.first().unwrap().1;
+
+            if iteration_count != SECRET.len() {
+                let secret_len = count_vec
+                    .iter()
+                    .find(|x| x.0 == format!("sessionid={}", &SECRET[..iteration_count + 1]))
+                    .unwrap()
+                    .1;
+
+                println!(
+                    "worst is: {}. best is: {}. {} is: {}",
+                    worst_compressed_char_len,
+                    best_compressed_char_len,
+                    &SECRET[..iteration_count + 1],
+                    secret_len
+                );
+            } else {
+                println!("last iteration. will it break?");
+                println!(
+                    "worst is: {}. best is: {}",
+                    worst_compressed_char_len, best_compressed_char_len,
+                );
+            }
+
+            discovered_secret_options = count_vec
+                .into_iter()
+                .filter(|t| t.1 == best_compressed_char_len)
+                .map(|t| t.0)
+                .collect();
+
+            iteration_count += 1;
+        }
+
+        println!("Summing up:");
+        for o in &discovered_secret_options {
+            println!("{}", o);
+        }
+
+        assert!(discovered_secret_options
+            .iter()
+            .find(|x| *x == &format!("sessionid={}", &SECRET[..]))
+            .is_some())
+    }
+
+    #[test]
+    fn test_cbc_compression_length_oracle_brute_force() {
+        const SECRET: &str = "TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE=";
+        let base64_char_pool = ('a'..='z')
+            .chain('A'..='Z')
+            .chain('0'..='9')
+            .chain(['+', '/', '='])
+            .collect::<Vec<_>>();
+        let mut discovered_secret_options = Vec::new();
+        discovered_secret_options.push(String::from(""));
+
+        for stage in 1..=SECRET.len() {
+            // begin stage - where we discover a letter
+
+            // step 1 - choose suffix for stage
+            // we want: sessionid={found_bytes}{suffix}
+            // so we could later iterate over possible chars and check:
+            // sessionid={found_bytes}{char}{suffix}
+            let mut option_to_suffix = Vec::new();
+
+            for option in discovered_secret_options {
+                let mut inflation_len = 0;
+                loop {
+                    inflation_len += 1;
+
+                    let inflation = (0..inflation_len).map(|_| "A").collect::<String>();
+                    let smaller_inflation =
+                        (0..(inflation_len - 1)).map(|_| "A").collect::<String>();
+                    let prefix_compressed_len = cbc_compression_length_oracle(
+                        format!("sessionid={}{}", option, inflation).as_bytes(),
+                    )
+                    .unwrap();
+
+                    let smaller_prefix_compressed_len = cbc_compression_length_oracle(
+                        format!("sessionid={}{}", option, smaller_inflation).as_bytes(),
+                    )
+                    .unwrap();
+
+                    if prefix_compressed_len > smaller_prefix_compressed_len {
+                        let option_suffix;
+                        let option_success_compressed_len;
+                        option_suffix = inflation_len - 1;
+
+                        // this is the len that when one char is added - expands so an entire new block is added in the CBC
+                        // perfect - becuase ideally for the right char it won't expand
+                        // yet for any other char it will - so we could distinguish right from wrong
+                        option_success_compressed_len = smaller_prefix_compressed_len;
+                        option_to_suffix
+                            .push((option, (option_suffix, option_success_compressed_len)));
+                        break;
+                    }
+                }
+            }
+
+            let mut next_stage_options = Vec::new();
+            let max_suffix_option = option_to_suffix.iter().max_by_key(|t| (t.1).0).unwrap();
+            // picking the option having a maximum suffix len proved to be correct
+            // why?
+            // this implies this is the best compressed option!
+            // since the suffix is the largest - yet the len returned by the oracle is the best
+
+            let mut inflation_char = b'A';
+            while next_stage_options.len() == 0 {
+                let suffix = (0..(max_suffix_option.1).0)
+                    .map(|_| inflation_char as char)
+                    .collect::<String>();
+                for c in &base64_char_pool {
+                    let option_compressed_len = cbc_compression_length_oracle(
+                        format!("sessionid={}{}{}", max_suffix_option.0, c, suffix).as_bytes(),
+                    )
+                    .unwrap();
+
+                    if option_compressed_len == (max_suffix_option.1).1 {
+                        next_stage_options.push(format!("{}{}", max_suffix_option.0, c));
+                    }
+                }
+
+                inflation_char += 1;
+            }
+
+            discovered_secret_options = next_stage_options;
+            println!(
+                "stage {}. options {}",
+                stage,
+                discovered_secret_options.len()
+            );
+        }
+
+        for o in &discovered_secret_options {
+            println!("{}", o);
+        }
+        assert!(discovered_secret_options
+            .iter()
+            .find(|x| *x == &SECRET[..])
+            .is_some())
+    }
+}
+
+pub fn cbc_compression_length_oracle(data: &[u8]) -> Res<usize> {
+    let formatted_message = format!("POST / HTTP/1.1\nHost: hapless.com\nCookie: sessionid=TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE=\nContent-Length: (({length}))\n(({data}))", length=data.len(), data=std::str::from_utf8(&data)?);
+    let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
+    compressor.write_all(formatted_message.as_bytes())?;
+    let compressed_bytes = compressor.finish()?;
+
+    let mut rng = rand::thread_rng();
+
+    let aes_key: Vec<u8> = (0..16).map(|_| rng.gen_range(0..256) as u8).collect();
+    let iv: Vec<u8> = (0..16).map(|_| rng.gen_range(0..256) as u8).collect();
+    Ok(aes::encrypt_cbc_ecb_128_bit(&compressed_bytes[..], &aes_key[..], &iv[..]).len())
+}
+
+pub fn ctr_compression_length_oracle(data: &[u8]) -> Res<usize> {
+    let formatted_message = format!("POST / HTTP/1.1\nHost: hapless.com\nCookie: sessionid=TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE=\nContent-Length: (({length}))\n(({data}))", length=data.len(), data=std::str::from_utf8(&data)?);
+    let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
+    compressor.write_all(formatted_message.as_bytes())?;
+    let compressed_bytes = compressor.finish()?;
+
+    let mut rng = rand::thread_rng();
+
+    let aes_key: Vec<u8> = (0..16).map(|_| rng.gen_range(0..256) as u8).collect();
+    Ok(ctr::apply_ctr(&compressed_bytes[..], &aes_key[..])?.len())
 }
 
 pub fn wrap_with_random_and_encrypt_ecb_or_cbc(data: &[u8]) -> (Vec<u8>, Mode) {
-    use rand::prelude::*;
     let mut rng = rand::thread_rng();
 
     let aes_key: Vec<u8> = (0..16).map(|_| rng.gen_range(0..256) as u8).collect();
@@ -212,8 +414,6 @@ pub fn cbc_padding_oracle_ciphertext_verifier(ciphertext: &[u8], iv: &[u8]) -> b
         Err(_) => false,
     }
 }
-
-use crate::ctr;
 
 pub fn get_key() -> &'static std::thread::LocalKey<[u8; 16]> {
     &AES_KEY

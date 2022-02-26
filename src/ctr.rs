@@ -50,9 +50,9 @@ mod tests {
 }
 
 use crate::aes;
+use crate::error::Res;
 use crate::xor;
 use byteorder::{ByteOrder, LittleEndian};
-use openssl::error::ErrorStack;
 
 pub fn edit(ciphertext: &[u8], key: &[u8], offset: usize, newtext: &[u8]) -> Option<Vec<u8>> {
     let mut edited_ciphertext = ciphertext.to_vec();
@@ -78,7 +78,7 @@ pub fn edit(ciphertext: &[u8], key: &[u8], offset: usize, newtext: &[u8]) -> Opt
     }
 }
 
-pub fn apply_ctr(data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+pub fn apply_ctr(data: &[u8], key: &[u8]) -> Res<Vec<u8>> {
     let mut output = Vec::new();
     for (counter, block) in data.chunks(16).enumerate() {
         let keystream_for_block =

@@ -1,6 +1,5 @@
 use crate::error::{Error, Res};
 use crate::padding;
-use openssl::error::ErrorStack;
 
 #[cfg(test)]
 mod tests {
@@ -79,7 +78,7 @@ mod tests {
     }
 }
 
-pub fn decrypt_aes_128_ecb(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+pub fn decrypt_aes_128_ecb(encrypted_data: &[u8], key: &[u8]) -> Res<Vec<u8>> {
     use openssl::symm::Cipher;
     use openssl::symm::Crypter;
     use openssl::symm::Mode;
@@ -95,7 +94,7 @@ pub fn decrypt_aes_128_ecb(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>,
     return Ok(output.drain(..encrypted_data.len()).collect());
 }
 
-pub fn encrypt_aes_128_ecb(data: &[u8], key: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+pub fn encrypt_aes_128_ecb(data: &[u8], key: &[u8]) -> Res<Vec<u8>> {
     use openssl::symm::Cipher;
     use openssl::symm::Crypter;
     use openssl::symm::Mode;
